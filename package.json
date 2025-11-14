@@ -1,0 +1,11 @@
+{
+  "name": "receipt-splitter",
+  "version": "1.0.0",
+  "description": "Free web app to extract totals from receipts and split costs.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "MIT"
+}
