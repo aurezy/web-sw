@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>영수증 N빵 계산기</title>
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   </head>
   <body>
     <main class="container">
@@ -20,8 +19,8 @@
       <section class="card">
         <h2>1. 영수증 이미지 업로드</h2>
         <label class="file-input">
-          <input type="file" id="receiptInput" accept="image/*" />
-          <span>이미지 선택하기</span>
+          <input type="file" id="receiptInput" accept="image/*" multiple />
+          <span>이미지 선택하기 (여러 장 가능)</span>
         </label>
         <p class="hint">사진이 선명할수록 인식이 잘 됩니다.</p>
         <div id="imagePreview" class="preview hidden">
@@ -32,18 +31,46 @@
       <section class="card">
         <h2>2. OCR 진행 상황</h2>
         <div id="progressBox" class="progress">대기 중</div>
-        <textarea id="rawText" placeholder="인식된 텍스트" rows="8" readonly></textarea>
+        <label class="input-group">
+          <span>OCR.space API 키 (선택)</span>
+          <input type="password" id="ocrApiKey" placeholder="미입력 시 데모 키 사용 (제한 있음)" />
+        </label>
+        <textarea id="rawText" placeholder="최근 인식된 텍스트" rows="8" readonly></textarea>
         <p class="hint">
-          총액이 올바르지 않다면 직접 수정해 주세요. (예: 28500)
+          총액이 올바르지 않다면 아래 영수증 목록에서 금액을 직접 수정해 주세요.
         </p>
       </section>
 
+      <section class="card" id="receiptManager">
+        <div class="section-heading">
+          <h2>3. 영수증 목록 및 합계</h2>
+          <button id="clearReceiptsBtn" type="button" class="ghost-button">모두 비우기</button>
+        </div>
+        <p class="hint">
+          여러 장의 영수증을 추가하면 자동으로 합산됩니다. 각 금액은 직접 수정할 수 있습니다.
+        </p>
+        <ul id="receiptList" class="receipt-list">
+          <li class="empty-placeholder">
+            아직 추가된 영수증이 없습니다. 이미지를 업로드하거나 아래에서 직접 금액을 추가하세요.
+          </li>
+        </ul>
+        <form id="manualForm" class="manual-form">
+          <label class="input-group">
+            <span>직접 금액 추가</span>
+            <div class="manual-row">
+              <input type="text" id="manualLabel" placeholder="예: 택시 영수증 (선택)" />
+              <input type="number" id="manualAmount" min="0" step="1" placeholder="금액 (원)" required />
+              <button type="submit" class="secondary-button">추가</button>
+            </div>
+          </label>
+        </form>
+        <div class="total-pill">
+          총 합계: <strong id="totalAmountDisplay">0원</strong>
+        </div>
+      </section>
+
       <section class="card">
-        <h2>3. 인원 수 입력</h2>
-        <label class="input-group">
-          <span>총 결제 금액 (원)</span>
-          <input type="number" id="totalInput" min="0" step="1" />
-        </label>
+        <h2>4. 인원 수 입력</h2>
         <label class="input-group">
           <span>함께한 인원</span>
           <input type="number" id="peopleInput" min="1" step="1" value="2" />
@@ -65,7 +92,7 @@
       <footer>
         <p>
           100% 무료 · 브라우저에서만 동작합니다. OCR은
-          <a href="https://github.com/naptha/tesseract.js" target="_blank" rel="noreferrer">Tesseract.js</a>
+          <a href="https://ocr.space/ocrapi" target="_blank" rel="noreferrer">OCR.space API</a>
           를 사용합니다.
         </p>
       </footer>

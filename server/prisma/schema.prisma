@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  name      String
+  avatarUrl String?   @map("avatar_url")
+  talents   Talent[]
+  messages  Message[] @relation("MessageSender")
+  requests  Reservation[] @relation("ReservationRequester")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+}
+
+model Talent {
+  id           Int           @id @default(autoincrement())
+  title        String
+  description  String
+  imageUrl     String?        @map("image_url")
+  category     String
+  tags         String
+  available    Boolean        @default(true)
+  owner        User           @relation(fields: [ownerId], references: [id])
+  ownerId      Int            @map("owner_id")
+  conversations Conversation[]
+  reservations Reservation[]
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+}
+
+model Conversation {
+  id        Int       @id @default(autoincrement())
+  talent    Talent    @relation(fields: [talentId], references: [id])
+  talentId  Int       @map("talent_id")
+  sender    User      @relation("MessageSender", fields: [senderId], references: [id])
+  senderId  Int       @map("sender_id")
+  messages  Message[]
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@unique([talentId, senderId])
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId Int          @map("conversation_id")
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  senderId       Int          @map("sender_id")
+  content        String
+  createdAt      DateTime     @default(now()) @map("created_at")
+}
+
+model Reservation {
+  id           Int       @id @default(autoincrement())
+  talent       Talent    @relation(fields: [talentId], references: [id])
+  talentId     Int       @map("talent_id")
+  requester    User      @relation("ReservationRequester", fields: [requesterId], references: [id])
+  requesterId  Int       @map("requester_id")
+  message      String?
+  status       ReservationStatus @default(PENDING)
+  requestedAt  DateTime  @default(now()) @map("requested_at")
+  notifiedAt   DateTime? @map("notified_at")
+}
+
+enum ReservationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
