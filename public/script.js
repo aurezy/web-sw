@@ -13,9 +13,6 @@ const breakdownList = document.getElementById('breakdownList');
 const copyBtn = document.getElementById('copyBtn');
 const copyHint = document.getElementById('copyHint');
 
-const { Tesseract } = window;
-
-let currentFile = null;
 let currentCopyText = '';
 
 receiptInput.addEventListener('change', async (event) => {
@@ -24,7 +21,6 @@ receiptInput.addEventListener('change', async (event) => {
     resetView();
     return;
   }
-  currentFile = file;
   showPreview(file);
   await runOcr(file);
 });
@@ -83,7 +79,6 @@ calculateBtn.addEventListener('click', () => {
 });
 
 function resetView() {
-  currentFile = null;
   currentCopyText = '';
   imagePreview.classList.add('hidden');
   previewImg.src = '';
@@ -106,24 +101,35 @@ function showPreview(file) {
 }
 
 async function runOcr(file) {
-  progressBox.textContent = '분석 준비 중...';
+  progressBox.textContent = '이미지 준비 중...';
   rawText.value = '';
   resultCard.hidden = true;
   breakdown.classList.add('hidden');
 
   try {
-    const { data } = await Tesseract.recognize(file, 'kor+eng', {
-      logger: ({ status, progress }) => {
-        if (status === 'recognizing text') {
-          const percent = Math.round(progress * 100);
-          progressBox.textContent = `인식 중... ${percent}%`;
-        } else {
-          progressBox.textContent = status;
-        }
+    const dataUrl = await fileToDataUrl(file);
+    if (!dataUrl) throw new Error('이미지 변환에 실패했습니다.');
+
+    const base64 = dataUrl.split(',')[1];
+    progressBox.textContent = '서버에 전송 중...';
+
+    const response = await fetch('/api/ocr', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        image: base64,
+        mime: file.type || 'image/png',
+      }),
     });
 
-    const text = data.text.trim();
+    const payload = await safeJson(response);
+    if (!response.ok) {
+      throw new Error(payload.error || 'OCR 서버 호출에 실패했습니다.');
+    }
+
+    const text = (payload.text || '').trim();
     rawText.value = text;
     progressBox.textContent = '완료';
 
@@ -135,8 +141,24 @@ async function runOcr(file) {
     }
   } catch (error) {
     console.error(error);
-    progressBox.textContent = '오류가 발생했습니다. 다시 시도해 주세요.';
+    progressBox.textContent = error.message || '오류가 발생했습니다. 다시 시도해 주세요.';
   }
+}
+
+function safeJson(response) {
+  return response
+    .text()
+    .then((text) => (text ? JSON.parse(text) : {}))
+    .catch(() => ({}));
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('이미지 파일을 읽는 중 문제가 발생했습니다.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 function detectTotal(text) {
@@ -145,33 +167,41 @@ function detectTotal(text) {
     .map((line) => line.replace(/[₩\\]/g, '').trim())
     .filter(Boolean);
 
-  const keywordPattern = /(합계|총액|총\s*계|받을\s*금액|결제\s*금액|카드금액|현금|금액)/i;
-  const numberPattern = /([0-9]{1,3}(?:[,\.][0-9]{3})+|[0-9]+)(?:\s*원)?/g;
+  const numberPattern = /(\b\d{1,3}(?:[,\.]\d{3})+\b|\b\d{3,}\b)(?:\s*원)?/g;
+  const excludeKeywordPattern = /(받을\s*금액|할인|포인트|적립|잔액|세전\s*금액|세\s*전|과세\s*물품\s*가액|과세\s*가액|과세\s*금액)/i;
 
-  let candidate = null;
-
-  for (const line of lines) {
-    if (!keywordPattern.test(line)) continue;
-
-    const numbers = extractNumbers(line, numberPattern);
-    if (numbers.length === 0) continue;
-
-    const maxNumber = Math.max(...numbers);
-    if (!candidate || maxNumber > candidate) {
-      candidate = maxNumber;
+  const candidates = lines.reduce((acc, line) => {
+    if (shouldSkipLine(line, excludeKeywordPattern)) {
+      return acc;
     }
-  }
+    return acc.concat(extractNumbers(line, numberPattern));
+  }, []);
 
-  if (candidate) {
-    return candidate;
-  }
-
-  const allNumbers = extractNumbers(lines.join(' '), numberPattern);
-  if (allNumbers.length === 0) {
+  if (candidates.length === 0) {
     return null;
   }
 
-  return Math.max(...allNumbers);
+  return Math.max(...candidates);
+}
+
+function shouldSkipLine(line, excludePattern) {
+  if (excludePattern.test(line)) return true;
+  if (isDateTimeOrPhoneLine(line)) return true;
+  return false;
+}
+
+function isDateTimeOrPhoneLine(line) {
+  const phonePattern = /0\d{1,2}-?\d{3,4}-?\d{4}/;
+  const compactPhonePattern = /0\d{9,10}/; // 01012345678 형태
+  const datePattern = /(\d{4}[.-]\d{1,2}[.-]\d{1,2})|(\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일)/;
+  const timePattern = /(\d{1,2}:\d{2})|(\d{1,2}\s*시\s*\d{1,2}\s*분?)/;
+
+  return (
+    phonePattern.test(line) ||
+    compactPhonePattern.test(line.replace(/\s/g, '')) ||
+    datePattern.test(line) ||
+    timePattern.test(line)
+  );
 }
 
 function extractNumbers(input, pattern) {
